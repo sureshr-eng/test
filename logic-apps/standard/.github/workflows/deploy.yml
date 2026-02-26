@@ -1,0 +1,129 @@
+name: Deploy Standard Logic App
+
+on: 
+    
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Choose environment to deploy'
+        required: true
+        default: dev
+        type: choice
+        options:
+          - dev
+          - qa
+          - uat
+          - prod
+
+env:
+  ENVIRONMENT: ${{ github.event.inputs.environment }}
+  resourceGroupName: $(jq -r ".resourceGroupName" ./bicep/modules/parameters/${{ github.event.inputs.environment }}parameters.json)
+  logicAppName: $(jq -r ".logicAppName" ./bicep/modules/parameters/${{ github.event.inputs.environment }}parameters.json)
+  location: $(jq -r ".location" ./bicep/modules/parameters/${{ github.event.inputs.environment }}parameters.json)
+  zip_file: $(jq -r ".zipfile" ./bicep/modules/parameters/${{ github.event.inputs.environment }}parameters.json)
+  appServicePlanName: $(jq -r ".appServicePlanName" ./bicep/modules/parameters/${{ github.event.inputs.environment }}parameters.json)
+  FUNCTIONS_EXTENSION_VERSION: $(jq -r ".FUNCTIONS_EXTENSION_VERSION" ./bicep/modules/parameters/${{ github.event.inputs.environment }}parameters.json)
+  FUNCTIONS_WORKER_RUNTIME: $(jq -r ".FUNCTIONS_WORKER_RUNTIME" ./bicep/modules/parameters/${{ github.event.inputs.environment }}parameters.json)
+  AzureWebJobsStorage: $(jq -r ".AzureWebJobsStorage" ./bicep/modules/parameters/${{ github.event.inputs.environment }}parameters.json)
+  APPINSIGHTS_INSTRUMENTATIONKEY: $(jq -r ".APPINSIGHTS_INSTRUMENTATIONKEY" ./bicep/modules/parameters/${{ github.event.inputs.environment }}parameters.json)
+  APPLICATIONINSIGHTS_CONNECTION_STRING: $(jq -r ".APPLICATIONINSIGHTS_CONNECTION_STRING" ./bicep/modules/parameters/${{ github.event.inputs.environment }}parameters.json)
+  APP_KIND: $(jq -r ".APP_KIND" ./bicep/modules/parameters/${{ github.event.inputs.environment }}parameters.json)
+  AzureFunctionsJobHost__extensionBundle__id: $(jq -r ".AzureFunctionsJobHost__extensionBundle__id" ./bicep/modules/parameters/${{ github.event.inputs.environment }}parameters.json)
+  AzureFunctionsJobHost__extensionBundle__version: $(jq -r ".AzureFunctionsJobHost__extensionBundle__version" ./bicep/modules/parameters/${{ github.event.inputs.environment }}parameters.json)
+  WEBSITE_NODE_DEFAULT_VERSION: $(jq -r ".WEBSITE_NODE_DEFAULT_VERSION" ./bicep/modules/parameters/${{ github.event.inputs.environment }}parameters.json)
+  WEBSITE_VNET_ROUTE_ALL: $(jq -r ".WEBSITE_VNET_ROUTE_ALL" ./bicep/modules/parameters/${{ github.event.inputs.environment }}parameters.json)
+  keyVaultName: $(jq -r ".keyVaultName" ./bicep/modules/parameters/${{ github.event.inputs.environment }}parameters.json)  
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v3
+    
+    - name: Set up .NET 8.x SDK
+      uses: actions/setup-dotnet@v3
+      with:
+        dotnet-version: '8.x'
+
+  deploy:
+    runs-on: KNA-AppInnovation-VNET-Joined-Runner-Dev
+    needs: build
+    environment: ${{ github.event.inputs.environment }}
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v3
+
+    - name: Log in to Azure
+      uses: azure/login@v2
+      with:
+        creds: >
+              {
+                "clientId":"${{ secrets.AZURE_CLIENT_ID }}",
+                "clientSecret":"${{ secrets.AZURE_CLIENT_SECRET }}",
+                "subscriptionId":"${{ secrets.AZURE_SUBSCRIPTION_ID }}",
+                "tenantId":"${{ secrets.AZURE_TENANT_ID }}"
+              }
+        enable-AzPSSession: false
+
+    - name: Install Bicep
+      run: az bicep install          
+
+    - name: Create ZIP file
+      run: |
+        zip -r ${{ env.zip_file }} ./* -x "bicep/*" "*.sln" "*.csproj"
+
+    - name: Extract the ZIP file
+      run: |
+        mkdir -p ./extracted
+        unzip ${{ env.zip_file }} -d ./extracted
+
+    - name: Copy environment-specific JSON files
+      run: |
+        cp -f ./bicep/modules/env_config/${{ github.event.inputs.environment }}/connections.json ./extracted/connections.json
+        cp -f ./bicep/modules/env_config/${{ github.event.inputs.environment }}/parameters.json ./extracted/parameters.json
+       
+
+    - name: Re-zip the extracted contents
+      run: |
+        NEW_ZIP_FILE="${{ env.zip_file }}"
+        cd ./extracted
+        zip -r ../$NEW_ZIP_FILE *  # Re-zip the extracted contents into a new ZIP file
+
+    - name: Deploy Azure Standard Logic App with Bicep
+      run: |
+        az deployment group create \
+          --resource-group ${{ env.resourceGroupName }} \
+          --template-file ./bicep/modules/StandardLa.bicep \
+          --parameters logicAppName=${{ env.logicAppName }} \
+          --parameters appServicePlanName=${{ env.appServicePlanName }} \
+          --parameters FUNCTIONS_EXTENSION_VERSION=${{ env.FUNCTIONS_EXTENSION_VERSION }} \
+          --parameters FUNCTIONS_WORKER_RUNTIME=${{ env.FUNCTIONS_WORKER_RUNTIME }} \
+          --parameters AzureWebJobsStorage=${{ env.AzureWebJobsStorage }} \
+          --parameters APPINSIGHTS_INSTRUMENTATIONKEY=${{ env.APPINSIGHTS_INSTRUMENTATIONKEY }} \
+          --parameters APPLICATIONINSIGHTS_CONNECTION_STRING=${{ env.APPLICATIONINSIGHTS_CONNECTION_STRING }} \
+          --parameters APP_KIND=${{ env.APP_KIND }} \
+          --parameters AzureFunctionsJobHost__extensionBundle__id=${{ env.AzureFunctionsJobHost__extensionBundle__id }} \
+          --parameters AzureFunctionsJobHost__extensionBundle__version="${{ env.AzureFunctionsJobHost__extensionBundle__version }}" \
+          --parameters WEBSITE_NODE_DEFAULT_VERSION=${{ env.WEBSITE_NODE_DEFAULT_VERSION }} \
+          --parameters WEBSITE_VNET_ROUTE_ALL=${{ env.WEBSITE_VNET_ROUTE_ALL }} \
+          --parameters tenantId=${{ secrets.AZURE_TENANT_ID }} \
+          --parameters Workflows_mwf_httpsReq_updateuserprofile_FlowState=${{ env.Workflows_mwf_httpsReq_updateuserprofile_FlowState }} \
+          --parameters Workflows_mwf_httpsReq_registeruser_FlowState=${{ env.Workflows_mwf_httpsReq_registeruser_FlowState }} \
+          --parameters logAnalyticsWorkspaceName=${{ env.logAnalyticsWorkspaceName }} \
+          --parameters logAnalyticsWorkspaceResourceGroupName=${{ env.logAnalyticsWorkspaceResourceGroupName }} \
+          --parameters onetrustConsentUrl=${{ env.onetrustConsentUrl}} \
+          --parameters token_userprofileupdate=${{ env.token_userprofileupdate }} \
+          --parameters token_userregistration=${{ env.token_userregistration }} \
+          --parameters keyVaultName=${{ env.keyVaultName }} \
+          --parameters azureTables_connectionString=${{ env.azureTables_connectionString }}
+
+
+    - name: Deploy to Azure Logic App
+      run: |
+        az functionapp deployment source config-zip \
+          --resource-group ${{ env.resourceGroupName }} \
+          --name ${{ env.logicAppName }} \
+          --src ${{ env.zip_file }}  # Use the re-zipped file

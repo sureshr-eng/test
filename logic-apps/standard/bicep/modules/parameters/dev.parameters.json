@@ -1,0 +1,23 @@
+{
+       "logicAppName": "d-la-customer-master-recv",
+       "zipfile":"d-la-customer-master-recv.zip",
+       "environment": "dev",
+       "resourceGroupName": "rg-logicapp-standard",
+       "location": "eastus",     
+       "appServicePlanName": "d-la-appservice2",
+	   "appServiceEnvironment":"kmc-eus-dev-appinnovation-ase-01",
+       "FUNCTIONS_EXTENSION_VERSION":"~4",
+       "FUNCTIONS_WORKER_RUNTIME":"dotnet",
+       "AzureWebJobsStorage":"@Microsoft.KeyVault(SecretUri=https://test-kv.vault.azure.net/secrets/common-azure-azurewebjobstorage-connectionstring)",
+       "logAnalyticsWorkspaceName":"d-log-la",
+       "logAnalyticsWorkspaceResourceGroupName": "d-rg-apicompute",
+       "APPLICATIONINSIGHTS_CONNECTION_STRING":"@Microsoft.KeyVault(SecretUri=https://test-kv.vault.azure.net/secrets/common-azure-applicationinsight-connectionstring)",
+       "APPINSIGHTS_INSTRUMENTATIONKEY":"@Microsoft.KeyVault(SecretUri=https://test.vault.azure.net/secrets/common-azure-applicationinsight-instrumentationkey)",
+       "APP_KIND":"workflowApp",
+       "AzureFunctionsJobHost__extensionBundle__id":"Microsoft.Azure.Functions.ExtensionBundle.Workflows",
+       "AzureFunctionsJobHost__extensionBundle__version":"[1.*, 2.0.0)",
+       "WEBSITE_NODE_DEFAULT_VERSION":"~20",
+       "WEBSITE_VNET_ROUTE_ALL":"1",            
+       "keyVaultName": "testkv",
+             
+}
